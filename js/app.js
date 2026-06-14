@@ -52,7 +52,7 @@ function setupPresence(){
 
 // ── CLOUDINARY ──
 async function uploadCloud(file,type){
-  showToast('📤 Uploading...');
+  // Upload running in background
   if(type==='image'){
     try{file=await compressImg(file);}catch(e){}
   }
@@ -248,7 +248,7 @@ async function notifyAllExcept(senderUid,icon,title,body){
   }catch(e){console.log(e);}
 }
 function fErr(c){const m={'auth/user-not-found':'No account found','auth/wrong-password':'Wrong password','auth/invalid-credential':'Wrong email or password','auth/email-already-in-use':'Email already registered','auth/weak-password':'Min 6 chars','auth/invalid-email':'Invalid email','auth/popup-closed-by-user':'Popup closed'};return m[c]||'Error: '+c;}
-async function doOut(){if(!confirm('Disconnect?'))return;await setPresence('Offline');await auth.signOut();}
+async function doOut(){if(!confirm('Disconnect?'))return;await setPresence('Offline');if(inboxChatUnsub)inboxChatUnsub();await auth.signOut();}
 async function delAccount(){
   if(!confirm('Delete account permanently?'))return;
   showOv(true);
@@ -1068,7 +1068,7 @@ async function handleF(e,dest){
   if(fType==='video'&&file.size>200*1024*1024){showToast('⚠️ Video too large. Max 200MB.');return;}
   if(fType==='audio'&&file.size>50*1024*1024){showToast('⚠️ Audio too large. Max 50MB.');return;}
   if(fType==='doc'&&file.size>50*1024*1024){showToast('⚠️ Document too large. Max 50MB.');return;}
-  showToast('📤 Uploading...');
+  // Upload running in background
   const fd=new FormData();fd.append('file',file);fd.append('upload_preset',PRESET);
   // Use correct resource_type per file category
   const rtype=fType==='video'?'video':fType==='audio'?'video':fType==='doc'?'raw':'auto';
@@ -1136,19 +1136,21 @@ function showImgPreview(file,dest){
 async function sendPreviewImg(){
   const modal=el('imgPreviewModal');if(modal)modal.remove();
   if(!_previewFile)return;
-  showToast('📤 Sending photo...');
-  // Always compress before upload - no more 10MB errors
+  // ✅ INSTANT: Show image message immediately with sending status
   let fileToSend=_previewFile;
   try{fileToSend=await compressImage(_previewFile);}catch(e){}
-  const url=await uploadCloud(fileToSend,'image');if(!url){_previewFile=null;return;}
   const t=now();
-  const m={type:'image',data:url,senderUid:CU.uid,senderName:MP?.name||'',time:t,seen:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  const m={type:'image',data:'',senderUid:CU.uid,senderName:MP?.name||'',time:t,seen:false,status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()};
   try{
     if(_previewDest==='g'&&curGrp){
-      await db.collection('groups').doc(curGrp.id).collection('messages').add({...m,senderPhoto:myPho||''});
+      const ref=await db.collection('groups').doc(curGrp.id).collection('messages').add({...m,senderPhoto:myPho||''});
+      // ✅ BACKGROUND UPLOAD
+      uploadCloud(fileToSend,'image').then(url=>{if(url)ref.update({data:url,status:'sent'});});
     }else if(_previewDest==='p'&&curChat){
       const cid=getCID(CU.uid,curChat.uid);
-      await db.collection('chats').doc(cid).collection('messages').add(m);
+      const ref=await db.collection('chats').doc(cid).collection('messages').add(m);
+      // ✅ BACKGROUND UPLOAD
+      uploadCloud(fileToSend,'image').then(url=>{if(url)ref.update({data:url,status:'sent'});});
       const _upd={participants:[CU.uid,curChat.uid],lastMsg:'__photo__',lastTime:t,lastTs:firebase.firestore.FieldValue.serverTimestamp()};
       _upd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
       await db.collection('chats').doc(cid).set(_upd,{merge:true});
@@ -1195,14 +1197,22 @@ async function stopAndSendVoice(){
   el('sendIcon').innerHTML='<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2v.93z"/>';
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
   if(!chunks.length||!curChat){showToast('⚠️ Nothing recorded');return;}
-  // Upload & send directly
-  await new Promise(r=>setTimeout(r,300)); // allow MediaRecorder to flush
+  await new Promise(r=>setTimeout(r,300));
   const blob=new Blob(chunks,{type:chunks[0]?.type||'audio/webm'});
   const file=new File([blob],'voice.webm',{type:'audio/webm'});
-  const url=await uploadCloud(file,'audio');if(!url)return;
   const mm=Math.floor(dur/60),ss=dur%60;
   const cid=getCID(CU.uid,curChat.uid);
-  await db.collection('chats').doc(cid).collection('messages').add({type:'voice',data:url,dur:mm+':'+(ss<10?'0':'')+ss,senderUid:CU.uid,senderName:MP?.name||'',time:now(),seen:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+  const t=now();
+  // ✅ INSTANT: Show message immediately with sending status
+  const msgRef=await db.collection('chats').doc(cid).collection('messages').add({
+    type:'voice',data:'',dur:mm+':'+(ss<10?'0':'')+ss,
+    senderUid:CU.uid,senderName:MP?.name||'',time:t,seen:false,
+    status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  });
+  // ✅ BACKGROUND: Upload without blocking UI
+  uploadCloud(file,'audio').then(url=>{
+    if(url) msgRef.update({data:url,status:'sent'});
+  });
   const _vUpd={participants:[CU.uid,curChat.uid],lastMsg:'__voice__',lastTime:now(),lastTs:firebase.firestore.FieldValue.serverTimestamp()};
   _vUpd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
   await db.collection('chats').doc(cid).set(_vUpd,{merge:true});
@@ -1259,10 +1269,19 @@ async function stopAndSendGVoice(){
   await new Promise(r=>setTimeout(r,300));
   const blob=new Blob(chunks,{type:chunks[0]?.type||'audio/webm'});
   const file=new File([blob],'voice.webm',{type:'audio/webm'});
-  const url=await uploadCloud(file,'audio');if(!url)return;
   const mm=Math.floor(dur/60),ss=dur%60;
-  await db.collection('groups').doc(curGrp.id).collection('messages').add({type:'voice',data:url,dur:mm+':'+(ss<10?'0':'')+ss,senderUid:CU.uid,senderName:MP?.name||'Me',senderPhoto:myPho||'',time:now(),createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-  showToast('🎙️ Voice sent!');
+  const t=now();
+  // ✅ INSTANT: Show voice message immediately
+  const gvRef=await db.collection('groups').doc(curGrp.id).collection('messages').add({
+    type:'voice',data:'',dur:mm+':'+(ss<10?'0':'')+ss,
+    senderUid:CU.uid,senderName:MP?.name||'Me',senderPhoto:myPho||'',
+    time:t,status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  });
+  // ✅ BACKGROUND: Upload without blocking UI
+  uploadCloud(file,'audio').then(url=>{
+    if(url) gvRef.update({data:url,status:'sent'});
+  });
+  showToast('🎙️ Voice sending...');
 }
 function cancelGVoice(){
   if(gmr&&gIsRec){try{gmr.ondataavailable=null;gmr.onstop=null;gmr.stop();}catch(e){}try{gmr.stream.getTracks().forEach(t=>t.stop());}catch(e){}}
