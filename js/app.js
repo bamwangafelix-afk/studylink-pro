@@ -920,9 +920,18 @@ function buildBbl(m,isGrp){
     const textPart=textHtml?'<div>'+textHtml+'</div>':'';
     inner=`${nameTag}${rq}${textPart}${linkCards}${!isGrp?`<div class="mar">${repBtn}</div>`:''} ${rcHtml}${receipt}`;
   }
-  else if(type==='image'){inner=`${nameTag}${rq}<img src="${m.data}" onclick="openM('${m.data}','image')" style="max-width:100%;max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:8px;display:block;background:#000;"><div class="mar"><button class="mabtn op" onclick="openM('${m.data}','image')">👁</button><button class="mabtn dl" onclick="dlM('${m.data}','img.jpg')">⬇</button></div>${rcHtml}`;}
-  else if(type==='video'){inner=`${nameTag}${rq}<video src="${m.data}" controls preload="none" style="max-width:200px;border-radius:8px;display:block;margin-top:3px;"></video><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','video.mp4')">⬇</button></div>${rcHtml}`;}
-  else if(type==='audio'){inner=`${nameTag}${rq}<audio src="${m.data}" controls preload="none" style="width:200px;display:block;margin-top:3px;border-radius:6px;"></audio><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','audio.mp3')">⬇</button></div>${rcHtml}`;}
+  else if(type==='image'){
+    if(!m.data){inner=`${nameTag}${rq}<div style="padding:12px;border-radius:8px;background:rgba(0,0,0,0.1);text-align:center;min-width:150px;"><div style="font-size:20px;">🖼️</div><div style="font-size:12px;opacity:0.7;margin-top:4px;">⏳ Uploading photo...</div></div>${rcHtml}`;}
+    else{inner=`${nameTag}${rq}<img src="${m.data}" onclick="openM('${m.data}','image')" style="max-width:100%;max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:8px;display:block;background:#000;"><div class="mar"><button class="mabtn op" onclick="openM('${m.data}','image')">👁</button><button class="mabtn dl" onclick="dlM('${m.data}','img.jpg')">⬇</button></div>${rcHtml}`;}
+  }
+  else if(type==='video'){
+    if(!m.data){inner=`${nameTag}${rq}<div style="padding:12px;border-radius:8px;background:rgba(0,0,0,0.1);text-align:center;min-width:150px;"><div style="font-size:20px;">🎥</div><div style="font-size:12px;opacity:0.7;margin-top:4px;">⏳ Uploading video...</div></div>${rcHtml}`;}
+    else{inner=`${nameTag}${rq}<video src="${m.data}" controls preload="none" style="max-width:200px;border-radius:8px;display:block;margin-top:3px;"></video><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','video.mp4')">⬇</button></div>${rcHtml}`;}
+  }
+  else if(type==='audio'){
+    if(!m.data){inner=`${nameTag}${rq}<div style="padding:12px;border-radius:8px;background:rgba(0,0,0,0.1);text-align:center;min-width:150px;"><div style="font-size:20px;">🎵</div><div style="font-size:12px;opacity:0.7;margin-top:4px;">⏳ Uploading audio...</div></div>${rcHtml}`;}
+    else{inner=`${nameTag}${rq}<audio src="${m.data}" controls preload="none" style="width:200px;display:block;margin-top:3px;border-radius:6px;"></audio><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','audio.mp3')">⬇</button></div>${rcHtml}`;}
+  }
   else if(type==='voice'){
     const playedBadge=m.voicePlayed&&self?'<span style="font-size:10px;opacity:.7;margin-left:4px;">🎧 Heard</span>':'';
     inner=`${nameTag}<div class="vbub" id="vp_${m.id}"><button class="vpbtn" onclick="toggleVP('${m.id}','${m.data}')">▶</button><div style="flex:1;"><div class="vprog" id="vbar_${m.id}" onclick="seekVP(event,'${m.id}')"><div class="vfill" id="vfill_${m.id}"></div></div></div><span class="vdur" id="vdur_${m.id}">${m.dur||'0:00'}</span>${playedBadge}</div><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','voice.webm')">⬇</button></div>${rcHtml}`;
@@ -1064,32 +1073,27 @@ function pickF(accept,type,dest){fType=type;fDest=dest;const fi=el(dest==='g'?'f
 async function handleF(e,dest){
   const file=e.target.files[0];if(!file)return;
   if(fType==='image'){showImgPreview(file,dest);return;}
-  // Size limits: video 200MB, audio 50MB, docs 50MB
+  // Size limits
   if(fType==='video'&&file.size>200*1024*1024){showToast('⚠️ Video too large. Max 200MB.');return;}
   if(fType==='audio'&&file.size>50*1024*1024){showToast('⚠️ Audio too large. Max 50MB.');return;}
   if(fType==='doc'&&file.size>50*1024*1024){showToast('⚠️ Document too large. Max 50MB.');return;}
-  // Upload running in background
-  const fd=new FormData();fd.append('file',file);fd.append('upload_preset',PRESET);
-  // Use correct resource_type per file category
-  const rtype=fType==='video'?'video':fType==='audio'?'video':fType==='doc'?'raw':'auto';
-  let url=null;
-  try{
-    const r=await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/${rtype}/upload`,{method:'POST',body:fd});
-    const d=await r.json();
-    if(d.secure_url)url=d.secure_url;
-    else throw new Error(d.error?.message||'Upload failed');
-  }catch(ex){showToast('❌ '+ex.message);return;}
   const t=now();
-  let m={senderUid:CU.uid,senderName:MP?.name||'',time:t,seen:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
-  if(fType==='video')m={...m,type:'video',data:url};
-  else if(fType==='audio')m={...m,type:'audio',data:url};
-  else{const ext=file.name.split('.').pop().toLowerCase();m={...m,type:'doc',data:url,name:file.name,ext};}
+  const ext=file.name.split('.').pop().toLowerCase();
+  const localType=fType==='video'?'video':fType==='audio'?'audio':'doc';
+  const rtype=fType==='video'?'video':fType==='audio'?'video':fType==='doc'?'raw':'auto';
+  const _typeLabel=fType==='video'?'__video__':fType==='audio'?'__audio__':'__doc__:'+file.name;
+  // ✅ INSTANT: Build message with sending status immediately
+  let m={senderUid:CU.uid,senderName:MP?.name||'',time:t,seen:false,status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(fType==='video')m={...m,type:'video',data:''};
+  else if(fType==='audio')m={...m,type:'audio',data:''};
+  else m={...m,type:'doc',data:'',name:file.name,ext};
   try{
-    if(dest==='g'&&curGrp)await db.collection('groups').doc(curGrp.id).collection('messages').add({...m,senderPhoto:myPho||''});
-    else if(dest==='p'&&curChat){
+    let msgRef;
+    if(dest==='g'&&curGrp){
+      msgRef=await db.collection('groups').doc(curGrp.id).collection('messages').add({...m,senderPhoto:myPho||''});
+    }else if(dest==='p'&&curChat){
       const cid=getCID(CU.uid,curChat.uid);
-      await db.collection('chats').doc(cid).collection('messages').add(m);
-      const _typeLabel=fType==='video'?'__video__':fType==='audio'?'__audio__':'__doc__:'+file.name;
+      msgRef=await db.collection('chats').doc(cid).collection('messages').add(m);
       const _upd={participants:[CU.uid,curChat.uid],lastMsg:_typeLabel,lastTime:t,lastTs:firebase.firestore.FieldValue.serverTimestamp()};
       _upd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
       await db.collection('chats').doc(cid).set(_upd,{merge:true});
@@ -1097,7 +1101,23 @@ async function handleF(e,dest){
       _fRecvUpd['unread.'+cid]=firebase.firestore.FieldValue.increment(1);
       db.collection('users').doc(curChat.uid).update(_fRecvUpd).catch(()=>{db.collection('users').doc(curChat.uid).set(_fRecvUpd,{merge:true}).catch(()=>{});});
     }
-    showToast('✅ Sent!');
+    // ✅ BACKGROUND: Upload file without blocking UI
+    if(msgRef){
+      showToast('📤 Uploading in background...');
+      const fd=new FormData();fd.append('file',file);fd.append('upload_preset',PRESET);
+      fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/${rtype}/upload`,{method:'POST',body:fd})
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.secure_url){
+            msgRef.update({data:d.secure_url,status:'sent'});
+            showToast('✅ Sent!');
+          }else{
+            msgRef.update({status:'failed'});
+            showToast('❌ Upload failed');
+          }
+        })
+        .catch(ex=>{msgRef.update({status:'failed'});showToast('❌ '+ex.message);});
+    }
   }catch(ex){showToast('❌ '+ex.message);}
 }
 let _previewFile=null,_previewDest=null;
