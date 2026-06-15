@@ -1295,6 +1295,15 @@ async function stopAndSendVoice(){
     status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
   }));
   console.debug('voice message local added',cid,msgRef.id,localUrl);
+  // Append local bubble immediately so user sees sent voice even if snapshot delayed
+  try{
+    const mbEl=el('msgB');
+    const localMsg={id:msgRef.id,senderUid:CU.uid,senderName:MP?.name||'',type:'voice',data:localUrl,dur:mm+':'+(ss<10?'0':'')+ss,time:t,status:'sending',seen:false};
+    const bblHtml=buildBbl(localMsg,false);
+    if(bblHtml){
+      const tmp=document.createElement('div');tmp.innerHTML=bblHtml;const node=tmp.firstElementChild; if(node){ mbEl.appendChild(node); mbEl.scrollTop=mbEl.scrollHeight; }
+    }else console.debug('buildBbl returned empty for local voice');
+  }catch(e){console.debug('append local voice failed',e);} 
   // ✅ BACKGROUND: Upload without blocking UI
   uploadCloud(file,'audio').then(url=>{
     if(url){ msgRef.update({data:url,status:'sent'}).then(()=>{try{URL.revokeObjectURL(localUrl);}catch(e){}}); console.debug('voice uploaded',cid,msgRef.id,url);} 
@@ -1367,6 +1376,13 @@ async function stopAndSendGVoice(){
     time:t,status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
   }));
   console.debug('group voice message local added',curGrp.id,gvRef.id,localUrl);
+  // Append local bubble in group chat immediately
+  try{
+    const gb=el('grpB');
+    const localMsg={id:gvRef.id,senderUid:CU.uid,senderName:MP?.name||'Me',type:'voice',data:localUrl,dur:mm+':'+(ss<10?'0':'')+ss,time:t,status:'sending',seen:false};
+    const bblHtml=buildBbl(localMsg,true);
+    if(bblHtml){const tmp=document.createElement('div');tmp.innerHTML=bblHtml;const node=tmp.firstElementChild;if(node){gb.appendChild(node);gb.scrollTop=gb.scrollHeight;}}
+  }catch(e){console.debug('append local group voice failed',e);} 
   // ✅ BACKGROUND: Upload without blocking UI
   uploadCloud(file,'audio').then(url=>{
     if(url){ gvRef.update({data:url,status:'sent'}).then(()=>{try{URL.revokeObjectURL(localUrl);}catch(e){}}); console.debug('group voice uploaded',curGrp.id,gvRef.id,url);} 
