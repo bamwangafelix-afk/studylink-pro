@@ -613,8 +613,10 @@ function openChat(name,uid){
 
   // Messages listener — uses docChanges so only new/changed messages are processed
   chatUnsub=db.collection('chats').doc(cid).collection('messages').orderBy('createdAt').limitToLast(50).onSnapshot(sn=>{
+    console.debug('chat messages snapshot',cid,'size',sn.size,'changes',sn.docChanges().length);
     const mb=el('msgB');
     sn.docChanges().forEach(change=>{
+      console.debug('chat docChange',change.type,change.doc.id,change.doc.data()?.ty||change.doc.data()?.type,change.doc.data());
       if(change.type==='removed'){
         const ex=mb.querySelector(`.bw[data-id="${change.doc.id}"]`);
         if(ex)ex.remove();return;
@@ -1292,9 +1294,10 @@ async function stopAndSendVoice(){
     senderUid:CU.uid,senderName:MP?.name||'',time:t,seen:false,
     status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
   }));
+  console.debug('voice message local added',cid,msgRef.id,localUrl);
   // ✅ BACKGROUND: Upload without blocking UI
   uploadCloud(file,'audio').then(url=>{
-    if(url){ msgRef.update({data:url,status:'sent'}).then(()=>{try{URL.revokeObjectURL(localUrl);}catch(e){}}); }
+    if(url){ msgRef.update({data:url,status:'sent'}).then(()=>{try{URL.revokeObjectURL(localUrl);}catch(e){}}); console.debug('voice uploaded',cid,msgRef.id,url);} 
   });
   const _vUpd={participants:[CU.uid,curChat.uid],lastMsg:'__voice__',lastTime:now(),lastTs:firebase.firestore.FieldValue.serverTimestamp()};
   _vUpd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
@@ -1363,9 +1366,10 @@ async function stopAndSendGVoice(){
     senderUid:CU.uid,senderName:MP?.name||'Me',senderPhoto:myPho||'',
     time:t,status:'sending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
   }));
+  console.debug('group voice message local added',curGrp.id,gvRef.id,localUrl);
   // ✅ BACKGROUND: Upload without blocking UI
   uploadCloud(file,'audio').then(url=>{
-    if(url){ gvRef.update({data:url,status:'sent'}).then(()=>{try{URL.revokeObjectURL(localUrl);}catch(e){}}); }
+    if(url){ gvRef.update({data:url,status:'sent'}).then(()=>{try{URL.revokeObjectURL(localUrl);}catch(e){}}); console.debug('group voice uploaded',curGrp.id,gvRef.id,url);} 
   });
   showToast('🎙️ Voice sending...');
 }
