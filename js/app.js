@@ -14,6 +14,8 @@ let fType=null,fDest='p';
 let mr=null,isRec=false,vCh=[],vSec=0,vInt=null;
 let gmr=null,gIsRec=false,gvCh=[],gvSec=0,gvInt=null;
 let vPlayers={},notifUnsub=null,msgBUnsub=null;
+// Feed pagination: show first N posts, load more on demand
+let postsPerPage=10,homeShowCount=10;
 let replyMsg=null,curEId=null,curED=null,typDebounce=null;
 
 async function loadFavs(){
@@ -362,10 +364,12 @@ function listenUsers(){
 // ── POSTS ──
 let cachedPosts=[],lastPostCount=0;
 function listenPosts(){
-  db.collection('posts').orderBy('createdAt','desc').limit(30).onSnapshot(sn=>{
+  db.collection('posts').orderBy('createdAt','desc').limit(100).onSnapshot(sn=>{
     const newPosts=sn.docs.map(d=>({id:d.id,...d.data()}));
     const isHomeVisible=el('Phome')&&el('Phome').style.display!=='none';
     if(isHomeVisible){
+      // Reset visible count when feed refreshes
+      homeShowCount=postsPerPage;
       cachedPosts=newPosts;lastPostCount=cachedPosts.length;
       renderHome(cachedPosts);
     }else{
@@ -420,8 +424,10 @@ function getStatusInfo(status,lastSeen){
 function renderHome(posts){
   const f=el('feed');
   if(!posts?.length){f.innerHTML="<p style='text-align:center;color:#888;'>No posts yet.</p>";return;}
+  // Only render up to homeShowCount posts; show Load more if more exist
   f.innerHTML='';
-  posts.forEach(p=>{
+  const toShow=posts.slice(0,homeShowCount);
+  toShow.forEach(p=>{
     const isG=p.type==='Group',isOwn=p.uid===CU?.uid;
     const st=getStatusInfo(p.user?.status,p.user?.lastSeen);
     const tags=(p.tags||[]).map(t=>`<span class="tbadge">${t}</span>`).join('');
@@ -448,6 +454,16 @@ function renderHome(posts){
       </div>
     </div>`;
   });
+  // If there are more posts than currently shown, append Load more button
+  if(posts.length>homeShowCount){
+    const moreHtml=`<div style="text-align:center;margin:12px 0;"><button class="btn" onclick="loadMorePosts()">Load more</button></div>`;
+    f.innerHTML+=moreHtml;
+  }
+}
+
+function loadMorePosts(){
+  homeShowCount+=postsPerPage;
+  renderHome(cachedPosts);
 }
 
 // ── FIND ──
