@@ -918,7 +918,7 @@ function toggleSelectMsg(id,isGrp){
   if(selectedMsgs.size>0){
     let bar=document.getElementById('selBar');
     if(!bar){bar=document.createElement('div');bar.id='selBar';bar.style.cssText='position:fixed;bottom:72px;left:0;right:0;background:#1a1a2e;color:#fff;padding:12px 16px;display:flex;gap:8px;align-items:center;z-index:5000;box-shadow:0 -2px 12px rgba(0,0,0,.4);';document.body.appendChild(bar);}
-    bar.innerHTML=`<span style="flex:1;font-size:13px;font-weight:bold;">${selectedMsgs.size} selected</span><button onclick="deleteSelectedMsgs(${isGrp},'me')" style="background:#e67e22;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🙈 For Me</button><button onclick="deleteSelectedMsgs(${isGrp},'everyone')" style="background:#e74c3c;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🗑️ Everyone</button><button onclick="clearSelection()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:9px 12px;border-radius:20px;font-size:13px;cursor:pointer;">✕</button>`;
+    bar.innerHTML=`<span style="flex:1;font-size:13px;font-weight:bold;">${selectedMsgs.size} selected</span><button onclick="deleteSelectedMsgs(${isGrp},'everyone')" style="background:#e74c3c;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🗑️ Everyone</button><button onclick="deleteSelectedMsgs(${isGrp},'me')" style="background:#e67e22;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🙈 For Me</button><button onclick="clearSelection()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:9px 12px;border-radius:20px;font-size:13px;cursor:pointer;">✕</button>`;
   }else{clearSelection();}
 }
 function clearSelection(){
@@ -936,9 +936,9 @@ async function deleteSelectedMsgs(isGrp,scope){
     sheet.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
     sheet.innerHTML=`<div style="background:var(--card);width:100%;max-width:500px;border-radius:18px 18px 0 0;padding:18px;">
       <p style="font-weight:bold;font-size:15px;text-align:center;margin-bottom:14px;">Delete ${count} message${count>1?'s':''}?</p>
-      <button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#e74c3c;color:#fff;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer;">🗑️ Delete for Everyone</button>
-      <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:var(--btnB);color:#fff;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer;">🙈 Delete for Me Only</button>
-      <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:var(--bg);color:var(--txt);border-radius:12px;font-size:14px;cursor:pointer;">Cancel</button>
+      <button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:transparent;color:#1e88e5;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;border:1px solid rgba(30,136,229,.25);">Delete for Everyone</button>
+      <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:transparent;color:#1e88e5;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;border:1px solid rgba(30,136,229,.25);">Delete for Me</button>
+      <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:transparent;color:#1e88e5;border-radius:12px;font-size:14px;cursor:pointer;border:1px solid rgba(30,136,229,.15);">Cancel</button>
     </div>`;
     sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.remove();});
     document.body.appendChild(sheet);
@@ -948,7 +948,15 @@ async function deleteSelectedMsgs(isGrp,scope){
 }
 async function execDelMsgs(scope,isGrp){
   el('delSheet')?.remove();
-  for(const id of selectedMsgs){
+  const ids=[...selectedMsgs];
+  // Immediately hide 'delete for me' bubbles from DOM so UI feels instant
+  if(scope==='me'){
+    ids.forEach(id=>{
+      const bw=document.querySelector(`.bw[data-id="${id}"]`);
+      if(bw)bw.remove();
+    });
+  }
+  for(const id of ids){
     try{
       let ref;
       if(!isGrp&&curChat)ref=db.collection('chats').doc(getCID(CU.uid,curChat.uid)).collection('messages').doc(id);
@@ -960,7 +968,7 @@ async function execDelMsgs(scope,isGrp){
     }catch(e){console.log(e);}
   }
   clearSelection();
-  showToast(scope==='everyone'?'🗑️ Deleted for everyone':'🙈 Deleted for you');
+  showToast(scope==='everyone'?'🗑️ Deleted for everyone':'🗑️ Deleted for you');
 }
 function buildBbl(m,isGrp){
   if(m.deletedFor&&m.deletedFor[CU?.uid])return '';
@@ -1010,40 +1018,46 @@ function buildBbl(m,isGrp){
   else if(type==='voice'){
     // Large retro mic SVG icon
     const micSVG=`<svg viewBox="0 0 48 48" width="26" height="26" fill="currentColor" style="opacity:.85;flex-shrink:0;"><rect x="16" y="2" width="16" height="26" rx="8"/><rect x="22" y="8" width="4" height="2.5" fill="#fff" opacity=".7" rx="1"/><rect x="22" y="13" width="4" height="2.5" fill="#fff" opacity=".7" rx="1"/><rect x="22" y="18" width="4" height="2.5" fill="#fff" opacity=".7" rx="1"/><path d="M8 24c0 8.837 7.163 16 16 16s16-7.163 16-16" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round"/><line x1="24" y1="40" x2="24" y2="46" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><line x1="14" y1="46" x2="34" y2="46" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>`;
-    // Waveform bars SVG — static version of the waveform image (shown when loaded)
+    // Blue accent color for voice bubbles (like WhatsApp)
+    const vBlue='#2196f3';
+    const vBubbleBg=self?'linear-gradient(135deg,#1565c0,#1e88e5)':'rgba(30,136,229,.13)';
+    const vWaveColor=self?'rgba(255,255,255,0.8)':vBlue;
+    // Waveform bars SVG
     const waveSVG=`<svg viewBox="0 0 120 32" width="110" height="28" style="flex:1;min-width:80px;" preserveAspectRatio="none">
       ${[2,4,8,6,10,14,18,12,20,24,28,22,26,30,24,20,28,22,18,24,16,12,18,10,14,8,6,10,4,6].map((h,i)=>{
         const x=2+i*4,bh=Math.max(4,h),y=(32-bh)/2;
-        return`<rect x="${x}" y="${y}" width="2.5" height="${bh}" rx="1.2" fill="currentColor" opacity="${0.5+h/60}"/>`;
+        return`<rect x="${x}" y="${y}" width="2.5" height="${bh}" rx="1.2" fill="${vWaveColor}" opacity="${0.5+h/60}"/>`;
       }).join('')}
     </svg>`;
-    // Voice receipts: ✓ = sent, ✓✓ = seen/heard
+    // Voice receipts: ✓ = sent, ✓✓ = delivered/seen, blue ✓✓ = played
     let voiceReceipt='';
     if(self){
       if(m.voicePlayed){voiceReceipt='<span style="font-size:11px;color:#4fc3f7;margin-left:4px;font-weight:bold;" data-vreceipt="1">✓✓</span>';}
-      else if(m.seen){voiceReceipt='<span style="font-size:11px;opacity:.8;margin-left:4px;">✓✓</span>';}
-      else{voiceReceipt='<span style="font-size:11px;opacity:.6;margin-left:4px;">✓</span>';}
+      else if(m.seen){voiceReceipt='<span style="font-size:11px;color:rgba(255,255,255,.9);margin-left:4px;">✓✓</span>';}
+      else{voiceReceipt='<span style="font-size:11px;color:rgba(255,255,255,.7);margin-left:4px;">✓</span>';}
     }
     const durLabel=m.dur||'0:00';
+    const playBtnBg=self?'rgba(255,255,255,0.25)':'#2196f3';
+    const playBtnColor=self?'#fff':'#fff';
     if(!m.data){
       // Still sending — show mic + "Sending..." + timer
-      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;">
-        <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${micSVG}</div>
+      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;background:${vBubbleBg};border-radius:16px;padding:10px 14px;">
+        <div style="width:38px;height:38px;border-radius:50%;background:${playBtnBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">${micSVG}</div>
         <div style="flex:1;"><div class="vprog" style="height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:5px;"><div style="width:0%;height:100%;background:rgba(255,255,255,.7);border-radius:2px;"></div></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;opacity:.7;">Sending...</span><span class="vdur">${durLabel}</span></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;opacity:.7;color:${self?'rgba(255,255,255,.8)':'var(--sub)'};">Sending...</span><span class="vdur">${durLabel}</span></div></div>
       </div>${rcHtml}`;
     }else{
-      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;align-items:center;">
-        <button class="vpbtn" onclick="toggleVP('${m.id}','${m.data}')" style="width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.25);color:inherit;font-size:17px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">▶</button>
+      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;align-items:center;background:${vBubbleBg};border-radius:16px;padding:10px 14px;">
+        <button class="vpbtn" onclick="toggleVP('${m.id}','${m.data}')" style="width:38px;height:38px;border-radius:50%;border:none;background:${playBtnBg};color:${playBtnColor};font-size:17px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(33,150,243,.4);">▶</button>
         ${micSVG}
         <div style="flex:1;min-width:0;">
           <div class="vprog" id="vbar_${m.id}" onclick="seekVP(event,'${m.id}')" style="height:28px;display:flex;align-items:center;cursor:pointer;position:relative;">
             ${waveSVG}
-            <div style="position:absolute;left:0;top:0;width:0%;height:100%;background:rgba(255,255,255,.15);border-radius:4px;transition:width .1s linear;" id="vfill_${m.id}"></div>
+            <div style="position:absolute;left:0;top:0;width:0%;height:100%;background:rgba(33,150,243,.2);border-radius:4px;transition:width .1s linear;" id="vfill_${m.id}"></div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
-            <span style="font-size:10px;opacity:.7;">Vocal message</span>
-            <div style="display:flex;align-items:center;gap:4px;"><span class="vdur" id="vdur_${m.id}" style="font-size:11px;">${durLabel}</span>${voiceReceipt}</div>
+            <span style="font-size:10px;color:${self?'rgba(255,255,255,.75)':'var(--sub)'};">Voice message</span>
+            <div style="display:flex;align-items:center;gap:4px;"><span class="vdur" id="vdur_${m.id}" style="font-size:11px;color:${self?'rgba(255,255,255,.9)':'var(--txt)'};">${durLabel}</span>${voiceReceipt}</div>
           </div>
         </div>
       </div><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','voice.webm')">⬇</button></div>${rcHtml}`;
@@ -1354,7 +1368,7 @@ async function stopAndSendVoice(){
   uploadCloud(file,'audio').then(url=>{
     if(url) msgRef.update({data:url,status:'sent'});
   });
-  const _vUpd={participants:[CU.uid,curChat.uid],lastMsg:'__voice__',lastTime:now(),lastTs:firebase.firestore.FieldValue.serverTimestamp()};
+  const _vUpd={participants:[CU.uid,curChat.uid],lastMsg:'__voice__',lastVoiceDur:mm+':'+(ss<10?'0':'')+ss,lastTime:now(),lastTs:firebase.firestore.FieldValue.serverTimestamp()};
   _vUpd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
   await db.collection('chats').doc(cid).set(_vUpd,{merge:true});
   // Signal receiver's inbox listener + increment nav badge unread
@@ -1447,7 +1461,7 @@ function setupVoiceSwipe(btnId,startFn,stopFn,cancelFn){
     // Long press (>200ms) → activate swipe-to-record mode
     holdTimer=setTimeout(()=>{
       holding=true;
-      navigator.vibrate&&navigator.vibrate([40]);
+      navigator.vibrate&&navigator.vibrate([60,30,40]);
       startFn();
     },200);
   },{passive:false});
@@ -1653,7 +1667,13 @@ function renderInbox(q="",sn=null){
       if(_rawMsg==='__photo__')_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>Photo`;
       else if(_rawMsg==='__video__')_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>Video`;
       else if(_rawMsg==='__audio__')_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>Audio`;
-      else if(_rawMsg==='__voice__')_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2v.93z"/></svg>Vocal message`;
+      else if(_rawMsg==='__voice__'){
+        // Show duration from chat data if stored
+        const _vDur=data.lastVoiceDur||'';
+        const _vSeen=(data.unread||{})[CU.uid]===0||unread===0;
+        const _vTick=_vSeen?'<span style="color:#4fc3f7;font-size:11px;margin-left:2px;font-weight:bold;">✓✓</span>':'<span style="font-size:11px;opacity:.6;margin-left:2px;">✓</span>';
+        _msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2v.93z"/></svg>Voice message${_vDur?' ('+_vDur+')':''}${_vTick}`;
+      }
       else if(_rawMsg==='__gdrive__')_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>File`;
       else if(_rawMsg.startsWith('__doc__:'))_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>${esc(_rawMsg.slice(8))||'Document'}`;
       else _msgHtml=esc(_rawMsg||'Tap to chat');
