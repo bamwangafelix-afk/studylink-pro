@@ -918,7 +918,10 @@ function toggleSelectMsg(id,isGrp){
   if(selectedMsgs.size>0){
     let bar=document.getElementById('selBar');
     if(!bar){bar=document.createElement('div');bar.id='selBar';bar.style.cssText='position:fixed;bottom:72px;left:0;right:0;background:#1a1a2e;color:#fff;padding:12px 16px;display:flex;gap:8px;align-items:center;z-index:5000;box-shadow:0 -2px 12px rgba(0,0,0,.4);';document.body.appendChild(bar);}
-    bar.innerHTML=`<span style="flex:1;font-size:13px;font-weight:bold;">${selectedMsgs.size} selected</span><button onclick="deleteSelectedMsgs(${isGrp},'everyone')" style="background:#e74c3c;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🗑️ Everyone</button><button onclick="deleteSelectedMsgs(${isGrp},'me')" style="background:#e67e22;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🙈 For Me</button><button onclick="clearSelection()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:9px 12px;border-radius:20px;font-size:13px;cursor:pointer;">✕</button>`;
+    // Check if sender (all selected messages sent by current user)
+    const allSelf=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
+    const everyoneBtn=allSelf?`<button onclick="deleteSelectedMsgs(${isGrp},'everyone')" style="background:#1565c0;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🗑️ Everyone</button>`:'';
+    bar.innerHTML=`<span style="flex:1;font-size:13px;font-weight:bold;">${selectedMsgs.size} selected</span>${everyoneBtn}<button onclick="deleteSelectedMsgs(${isGrp},'me')" style="background:#1565c0;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🙈 For Me</button><button onclick="clearSelection()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:9px 12px;border-radius:20px;font-size:13px;cursor:pointer;">✕ Cancel</button>`;
   }else{clearSelection();}
 }
 function clearSelection(){
@@ -932,13 +935,14 @@ async function deleteSelectedMsgs(isGrp,scope){
   if(!scope){
     // Fallback: show sheet
     const count=selectedMsgs.size;
+    const allSelfFb=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
     const sheet=document.createElement('div');sheet.id='delSheet';
     sheet.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
     sheet.innerHTML=`<div style="background:var(--card);width:100%;max-width:500px;border-radius:18px 18px 0 0;padding:18px;">
       <p style="font-weight:bold;font-size:15px;text-align:center;margin-bottom:14px;">Delete ${count} message${count>1?'s':''}?</p>
-      <button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:transparent;color:#1e88e5;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;border:1px solid rgba(30,136,229,.25);">Delete for Everyone</button>
-      <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:transparent;color:#1e88e5;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;border:1px solid rgba(30,136,229,.25);">Delete for Me</button>
-      <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:transparent;color:#1e88e5;border-radius:12px;font-size:14px;cursor:pointer;border:1px solid rgba(30,136,229,.15);">Cancel</button>
+      ${allSelfFb?`<button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">🗑️ Delete for Everyone</button>`:''}
+      <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">🙈 Delete for Me</button>
+      <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:rgba(30,136,229,.12);color:#1e88e5;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer;">Cancel</button>
     </div>`;
     sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.remove();});
     document.body.appendChild(sheet);
@@ -1330,8 +1334,10 @@ async function startVoice(){
     mr.start(200);isRec=true;vSec=0;
     // 1 vibration pulse on start (WhatsApp style)
     navigator.vibrate&&navigator.vibrate([60]);
-    // Button → red send arrow
-    el('sendB').classList.add('rec');el('sendB').style.background='#e74c3c';
+    // Button → blue send arrow + animate up
+    el('sendB').classList.add('rec');el('sendB').style.background='#1565c0';
+    el('sendB').style.transform='translateY(-8px) scale(1.15)';
+    el('sendB').style.transition='transform 0.2s ease';
     el('sendIcon').innerHTML='<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>';
     el('vbar').style.display='flex';
     drawBars('vWave',()=>isRec);
@@ -1347,10 +1353,13 @@ async function stopAndSendVoice(){
   const dur=vSec;
   try{mr.stop();}catch(e){}
   try{mr.stream.getTracks().forEach(t=>t.stop());}catch(e){}
-  isRec=false;vCh=[];vSec=0;
+  isRec=false;vCh=[];vSec=0;mr=null;
   el('sendB').classList.remove('rec');el('sendB').style.background='var(--btnB)';
+  el('sendB').style.transform='';el('sendB').style.transition='';
   setMicIcon('sendIcon');
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
+  // Force icon back to mic (not send arrow)
+  const icon=el('sendIcon');if(icon){icon.setAttribute('viewBox','0 0 48 48');icon.setAttribute('width','26');icon.setAttribute('height','26');icon.innerHTML=MIC_SVG_INNER;}
   if(!chunks.length||!curChat){showToast('⚠️ Nothing recorded');return;}
   await new Promise(r=>setTimeout(r,300));
   const blob=new Blob(chunks,{type:chunks[0]?.type||'audio/webm'});
@@ -1366,7 +1375,15 @@ async function stopAndSendVoice(){
   });
   // ✅ BACKGROUND: Upload without blocking UI
   uploadCloud(file,'audio').then(url=>{
-    if(url) msgRef.update({data:url,status:'sent'});
+    if(url){
+      msgRef.update({data:url,status:'sent'});
+      // Update the sending bubble in DOM if still visible
+      const vbub=document.getElementById('vp_'+msgRef.id);
+      if(vbub){
+        const sendingSpan=vbub.querySelector('span');
+        if(sendingSpan&&sendingSpan.textContent==='Sending...')sendingSpan.textContent='Sent';
+      }
+    }
   });
   const _vUpd={participants:[CU.uid,curChat.uid],lastMsg:'__voice__',lastVoiceDur:mm+':'+(ss<10?'0':'')+ss,lastTime:now(),lastTs:firebase.firestore.FieldValue.serverTimestamp()};
   _vUpd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
@@ -1381,9 +1398,11 @@ async function stopAndSendVoice(){
 }
 function cancelVoice(){
   if(mr&&isRec){try{mr.ondataavailable=null;mr.onstop=null;mr.stop();}catch(e){}try{mr.stream.getTracks().forEach(t=>t.stop());}catch(e){}}
-  isRec=false;vCh=[];vSec=0;clearInterval(vInt);
+  isRec=false;vCh=[];vSec=0;clearInterval(vInt);mr=null;
   el('sendB').classList.remove('rec');el('sendB').style.background='var(--btnB)';
+  el('sendB').style.transform='';el('sendB').style.transition='';
   setMicIcon('sendIcon');
+  const icon=el('sendIcon');if(icon){icon.setAttribute('viewBox','0 0 48 48');icon.setAttribute('width','26');icon.setAttribute('height','26');icon.innerHTML=MIC_SVG_INNER;}
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
 }
 // Keep old processVoice/stopVoice/showVoiceReady stubs so smartSend still compiles
@@ -1500,7 +1519,28 @@ function toggleVP(id,src){
   if(!vPlayers[id]){
     const a=new Audio(src);vPlayers[id]=a;
     a.ontimeupdate=()=>{const f=el('vfill_'+id);if(f&&a.duration)f.style.width=(a.currentTime/a.duration*100)+'%';const d=el('vdur_'+id);if(d&&a.duration){const r=a.duration-a.currentTime;d.textContent=Math.floor(r/60)+':'+(('0'+Math.floor(r%60)).slice(-2));}};
-    a.onended=()=>{if(btn)btn.textContent='▶';};
+    a.onended=()=>{
+      if(btn)btn.textContent='▶';
+      // Reset fill bar
+      const f=el('vfill_'+id);if(f)f.style.width='0%';
+      // Auto-play next voice message below
+      const curBW=document.querySelector(`.bw[data-id="${id}"]`);
+      if(curBW){
+        let next=curBW.nextElementSibling;
+        while(next){
+          const nid=next.dataset.id;
+          const nvbub=next.querySelector('.vbub');
+          const nvbtn=next.querySelector('.vpbtn');
+          if(nvbub&&nvbtn&&nid){
+            // Found next voice bubble — play it
+            const nsrc=nvbtn.getAttribute('onclick')?.match(/'([^']+)'/g)?.[1]?.replace(/'/g,'');
+            if(nsrc)setTimeout(()=>toggleVP(nid,nsrc),300);
+            break;
+          }
+          next=next.nextElementSibling;
+        }
+      }
+    };
     a.onerror=()=>{showToast('⚠️ Cannot play');if(btn)btn.textContent='▶';};
     // Mark as played for sender notification - only if receiver is playing
     a.onplay=()=>{
@@ -1539,8 +1579,8 @@ function drawBars(canvasId,isRecFn){
       const bh=Math.max(4,Math.floor(h*H));
       const x=i*(barW+gap);
       const y=(H-bh)/2;
-      // Rounded rect bars in red
-      ctx.fillStyle='#e74c3c';
+      // Rounded rect bars in blue
+      ctx.fillStyle='#1e88e5';
       const r=Math.min(barW/2,3);
       ctx.beginPath();
       ctx.roundRect?ctx.roundRect(x,y,barW,bh,r):ctx.rect(x,y,barW,bh);
