@@ -656,12 +656,40 @@ function openChat(name,uid){
   window._loadMoreMsgs=()=>{_msgLimit+=30;_loadMsgs(_msgLimit);};
   _loadMsgs(_msgLimit);
 
-  // Typing indicator listener (stored separately so it can be cleaned up)
+  // Typing/Recording indicator listener
   window._typingUnsub=db.collection('chats').doc(cid).onSnapshot(sn=>{
-    const ty=(sn.data()?.ty||sn.data()?.typing||{})[uid];
-    el('typebar').style.display=ty?'block':'none';
-    if(ty)el('typebar').textContent='⌨️ '+name+' is typing...';
+    const d=sn.data()||{};
+    const isTyping=(d.ty||d.typing||{})[uid];
+    const isRecording=(d.recording||{})[uid];
+    const bar=el('typebar');if(!bar)return;
+    if(isRecording){
+      bar.style.display='flex';
+      bar.innerHTML=`<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>${name} is recording...</span>
+        <span class="_vdots" style="letter-spacing:2px;">&#x25CF;&#x25CF;&#x25CF;</span>
+      </span>`;
+    } else if(isTyping){
+      bar.style.display='flex';
+      bar.innerHTML=`<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);">
+        <span>${name} is typing</span>
+        <span class="_tdots" style="display:inline-flex;gap:3px;align-items:center;">
+          <span style="width:5px;height:5px;border-radius:50%;background:var(--sub);animation:tdot .9s infinite both" class="d1"></span>
+          <span style="width:5px;height:5px;border-radius:50%;background:var(--sub);animation:tdot .9s .2s infinite both" class="d2"></span>
+          <span style="width:5px;height:5px;border-radius:50%;background:var(--sub);animation:tdot .9s .4s infinite both" class="d3"></span>
+        </span>
+      </span>`;
+    } else {
+      bar.style.display='none';
+      bar.innerHTML='';
+    }
   });
+  // Inject dot animation CSS once
+  if(!document.getElementById('_tdotCSS')){
+    const s=document.createElement('style');s.id='_tdotCSS';
+    s.textContent='@keyframes tdot{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}#typebar{align-items:center;padding:4px 14px;}';
+    document.head.appendChild(s);
+  }
 }
 function closeChat(){
   el('chatW').style.display='none';
@@ -918,10 +946,10 @@ function toggleSelectMsg(id,isGrp){
   if(selectedMsgs.size>0){
     let bar=document.getElementById('selBar');
     if(!bar){bar=document.createElement('div');bar.id='selBar';bar.style.cssText='position:fixed;bottom:72px;left:0;right:0;background:#1a1a2e;color:#fff;padding:12px 16px;display:flex;gap:8px;align-items:center;z-index:5000;box-shadow:0 -2px 12px rgba(0,0,0,.4);';document.body.appendChild(bar);}
-    // Check if sender (all selected messages sent by current user)
-    const allSelf=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
-    const everyoneBtn=allSelf?`<button onclick="deleteSelectedMsgs(${isGrp},'everyone')" style="background:#1565c0;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🗑️ Everyone</button>`:'';
-    bar.innerHTML=`<span style="flex:1;font-size:13px;font-weight:bold;">${selectedMsgs.size} selected</span>${everyoneBtn}<button onclick="deleteSelectedMsgs(${isGrp},'me')" style="background:#1565c0;color:#fff;border:none;padding:9px 14px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">🙈 For Me</button><button onclick="clearSelection()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:9px 12px;border-radius:20px;font-size:13px;cursor:pointer;">✕ Cancel</button>`;
+    // Sender sees: Delete for Everyone + Delete for Me + Cancel. Receiver: Delete for Me + Cancel only.
+    const _allSelf=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
+    const _evBtn=_allSelf?`<button onclick="deleteSelectedMsgs(${isGrp},'everyone')" style="flex:1;background:#1565c0;color:#fff;border:none;padding:9px 10px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">Delete for Everyone</button>`:'';
+    bar.innerHTML=`<span style="font-size:13px;font-weight:bold;white-space:nowrap;">${selectedMsgs.size} selected</span>${_evBtn}<button onclick="deleteSelectedMsgs(${isGrp},'me')" style="flex:1;background:#1565c0;color:#fff;border:none;padding:9px 10px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">Delete for Me</button><button onclick="clearSelection()" style="background:#1565c0;color:#fff;border:none;padding:9px 12px;border-radius:20px;font-size:13px;font-weight:bold;cursor:pointer;">Cancel</button>`;
   }else{clearSelection();}
 }
 function clearSelection(){
@@ -935,14 +963,14 @@ async function deleteSelectedMsgs(isGrp,scope){
   if(!scope){
     // Fallback: show sheet
     const count=selectedMsgs.size;
-    const allSelfFb=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
+    const _sheetAllSelf=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
     const sheet=document.createElement('div');sheet.id='delSheet';
     sheet.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
     sheet.innerHTML=`<div style="background:var(--card);width:100%;max-width:500px;border-radius:18px 18px 0 0;padding:18px;">
       <p style="font-weight:bold;font-size:15px;text-align:center;margin-bottom:14px;">Delete ${count} message${count>1?'s':''}?</p>
-      ${allSelfFb?`<button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">🗑️ Delete for Everyone</button>`:''}
-      <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">🙈 Delete for Me</button>
-      <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:rgba(30,136,229,.12);color:#1e88e5;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer;">Cancel</button>
+      ${_sheetAllSelf?`<button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">Delete for Everyone</button>`:''}
+      <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">Delete for Me</button>
+      <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer;">Cancel</button>
     </div>`;
     sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.remove();});
     document.body.appendChild(sheet);
@@ -1044,11 +1072,17 @@ function buildBbl(m,isGrp){
     const playBtnBg=self?'rgba(255,255,255,0.25)':'#2196f3';
     const playBtnColor=self?'#fff':'#fff';
     if(!m.data){
-      // Still sending — show mic + "Sending..." + timer
-      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;background:${vBubbleBg};border-radius:16px;padding:10px 14px;">
+      // Uploading — show same layout as sent with ✓ tick (no "Sending..." text)
+      const sendReceipt=self?'<span style="font-size:11px;color:rgba(255,255,255,.7);margin-left:4px;">✓</span>':''
+      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;align-items:center;background:${vBubbleBg};border-radius:16px;padding:10px 14px;">
         <div style="width:38px;height:38px;border-radius:50%;background:${playBtnBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">${micSVG}</div>
-        <div style="flex:1;"><div class="vprog" style="height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:5px;"><div style="width:0%;height:100%;background:rgba(255,255,255,.7);border-radius:2px;"></div></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;opacity:.7;color:${self?'rgba(255,255,255,.8)':'var(--sub)'};">Sending...</span><span class="vdur">${durLabel}</span></div></div>
+        <div style="flex:1;min-width:0;">
+          <div style="height:28px;display:flex;align-items:center;">${waveSVG}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+            <span style="font-size:10px;color:${self?'rgba(255,255,255,.75)':'var(--sub)'};">Voice message</span>
+            <div style="display:flex;align-items:center;gap:4px;"><span class="vdur" style="font-size:11px;color:${self?'rgba(255,255,255,.9)':'var(--txt)'};">${durLabel}</span>${sendReceipt}</div>
+          </div>
+        </div>
       </div>${rcHtml}`;
     }else{
       inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="min-width:220px;gap:10px;align-items:center;background:${vBubbleBg};border-radius:16px;padding:10px 14px;">
@@ -1325,6 +1359,7 @@ function cancelPreview(){const m=el('imgPreviewModal');if(m)m.remove();_previewF
 //       release / tap send → stop recording → auto upload & send
 function toggleVoice(){isRec?stopAndSendVoice():startVoice();}
 async function startVoice(){
+  if(isRec)return; // guard: don't double-start
   if(!navigator.mediaDevices||!window.MediaRecorder){showToast('🎙️ Microphone not supported. Use Chrome.');return;}
   try{
     const s=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -1332,16 +1367,15 @@ async function startVoice(){
     mr=new MediaRecorder(s,opts);vCh=[];
     mr.ondataavailable=e=>{if(e.data?.size>0)vCh.push(e.data);};
     mr.start(200);isRec=true;vSec=0;
-    // 1 vibration pulse on start (WhatsApp style)
-    navigator.vibrate&&navigator.vibrate([60]);
-    // Button → blue send arrow + animate up
+    // Button → blue mic (recording state)
     el('sendB').classList.add('rec');el('sendB').style.background='#1565c0';
-    el('sendB').style.transform='translateY(-8px) scale(1.15)';
-    el('sendB').style.transition='transform 0.2s ease';
-    el('sendIcon').innerHTML='<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>';
+    el('sendB').style.transform='translateY(-6px) scale(1.12)';
+    el('sendB').style.transition='transform 0.15s ease';
     el('vbar').style.display='flex';
     drawBars('vWave',()=>isRec);
     vInt=setInterval(()=>{vSec++;const mm=Math.floor(vSec/60),ss=vSec%60;el('vTimer').textContent=mm+':'+(ss<10?'0':'')+ss;},1000);
+    // Signal to other person: "recording..."
+    if(curChat){const _rcid=getCID(CU.uid,curChat.uid);db.collection('chats').doc(_rcid).set({recording:{[CU.uid]:true}},{merge:true}).catch(()=>{});}
   }catch(err){showToast(err.name==='NotAllowedError'?'🎙️ Tap 🔒 → Allow Mic → Reload':'🎙️ '+err.message);}
 }
 async function stopAndSendVoice(){
@@ -1354,12 +1388,14 @@ async function stopAndSendVoice(){
   try{mr.stop();}catch(e){}
   try{mr.stream.getTracks().forEach(t=>t.stop());}catch(e){}
   isRec=false;vCh=[];vSec=0;mr=null;
-  el('sendB').classList.remove('rec');el('sendB').style.background='var(--btnB)';
-  el('sendB').style.transform='';el('sendB').style.transition='';
+  el('sendB').classList.remove('rec');
+  el('sendB').style.background='var(--btnB)';
+  el('sendB').style.transform='';
+  el('sendB').style.transition='';
   setMicIcon('sendIcon');
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
-  // Force icon back to mic (not send arrow)
-  const icon=el('sendIcon');if(icon){icon.setAttribute('viewBox','0 0 48 48');icon.setAttribute('width','26');icon.setAttribute('height','26');icon.innerHTML=MIC_SVG_INNER;}
+  // Clear recording signal
+  if(curChat){const _rcid=getCID(CU.uid,curChat.uid);db.collection('chats').doc(_rcid).set({recording:{[CU.uid]:false}},{merge:true}).catch(()=>{});}
   if(!chunks.length||!curChat){showToast('⚠️ Nothing recorded');return;}
   await new Promise(r=>setTimeout(r,300));
   const blob=new Blob(chunks,{type:chunks[0]?.type||'audio/webm'});
@@ -1375,15 +1411,7 @@ async function stopAndSendVoice(){
   });
   // ✅ BACKGROUND: Upload without blocking UI
   uploadCloud(file,'audio').then(url=>{
-    if(url){
-      msgRef.update({data:url,status:'sent'});
-      // Update the sending bubble in DOM if still visible
-      const vbub=document.getElementById('vp_'+msgRef.id);
-      if(vbub){
-        const sendingSpan=vbub.querySelector('span');
-        if(sendingSpan&&sendingSpan.textContent==='Sending...')sendingSpan.textContent='Sent';
-      }
-    }
+    if(url) msgRef.update({data:url,status:'sent'});
   });
   const _vUpd={participants:[CU.uid,curChat.uid],lastMsg:'__voice__',lastVoiceDur:mm+':'+(ss<10?'0':'')+ss,lastTime:now(),lastTs:firebase.firestore.FieldValue.serverTimestamp()};
   _vUpd['unread.'+curChat.uid]=firebase.firestore.FieldValue.increment(1);
@@ -1399,11 +1427,14 @@ async function stopAndSendVoice(){
 function cancelVoice(){
   if(mr&&isRec){try{mr.ondataavailable=null;mr.onstop=null;mr.stop();}catch(e){}try{mr.stream.getTracks().forEach(t=>t.stop());}catch(e){}}
   isRec=false;vCh=[];vSec=0;clearInterval(vInt);mr=null;
-  el('sendB').classList.remove('rec');el('sendB').style.background='var(--btnB)';
-  el('sendB').style.transform='';el('sendB').style.transition='';
+  el('sendB').classList.remove('rec');
+  el('sendB').style.background='var(--btnB)';
+  el('sendB').style.transform='';
+  el('sendB').style.transition='';
   setMicIcon('sendIcon');
-  const icon=el('sendIcon');if(icon){icon.setAttribute('viewBox','0 0 48 48');icon.setAttribute('width','26');icon.setAttribute('height','26');icon.innerHTML=MIC_SVG_INNER;}
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
+  // Clear recording signal
+  if(curChat){const _rcid=getCID(CU.uid,curChat.uid);db.collection('chats').doc(_rcid).set({recording:{[CU.uid]:false}},{merge:true}).catch(()=>{});}
 }
 // Keep old processVoice/stopVoice/showVoiceReady stubs so smartSend still compiles
 function stopVoice(){stopAndSendVoice();}
@@ -1469,43 +1500,36 @@ function cancelGVoice(){
 // Called from HTML after chat opens
 function setupVoiceSwipe(btnId,startFn,stopFn,cancelFn){
   const btn=el(btnId);if(!btn)return;
-  let startY=0,startX=0,swiped=false,holding=false,holdTimer=null;
+  let startX=0,startY=0,_voiceActive=false,_cancelled=false;
   btn.addEventListener('touchstart',e=>{
-    // Only activate swipe-up when input is empty (mic mode)
-    const inp=el('mIn')||el('gMIn');
+    // Only in mic mode (input empty, not already recording)
+    const inp=btnId==='sendB'?el('mIn'):el('gIn');
     if(inp&&inp.value.trim())return;
     e.preventDefault();
-    const t=e.touches[0];startY=t.clientY;startX=t.clientX;swiped=false;holding=false;
-    // Short press → normal click handled by onclick
-    // Long press (>200ms) → activate swipe-to-record mode
-    holdTimer=setTimeout(()=>{
-      holding=true;
-      navigator.vibrate&&navigator.vibrate([60,30,40]);
-      startFn();
-    },200);
+    const t=e.touches[0];startX=t.clientX;startY=t.clientY;_voiceActive=false;_cancelled=false;
+    // Start recording immediately on touch
+    navigator.vibrate&&navigator.vibrate([40]);
+    _voiceActive=true;
+    startFn();
   },{passive:false});
   btn.addEventListener('touchmove',e=>{
-    if(!holding)return;
+    if(!_voiceActive||_cancelled)return;
     e.preventDefault();
     const t=e.touches[0];
-    const dy=startY-t.clientY; // positive = swipe up
-    if(dy>40&&!swiped){swiped=true;}
-    // Swipe left >80px while recording = cancel
+    // Swipe left >80px = cancel
     const dx=startX-t.clientX;
-    if(dx>80&&holding){
-      clearTimeout(holdTimer);holding=false;swiped=false;
+    if(dx>80){
+      _cancelled=true;_voiceActive=false;
       cancelFn();
       navigator.vibrate&&navigator.vibrate([30,30]);
     }
   },{passive:false});
   btn.addEventListener('touchend',e=>{
-    clearTimeout(holdTimer);
-    if(holding){
+    if(_voiceActive&&!_cancelled){
       e.preventDefault();
-      // Release finger → send
       stopFn();
     }
-    holding=false;swiped=false;
+    _voiceActive=false;_cancelled=false;
   },{passive:false});
 }
 // Stubs for smartGSend compatibility
@@ -1519,28 +1543,7 @@ function toggleVP(id,src){
   if(!vPlayers[id]){
     const a=new Audio(src);vPlayers[id]=a;
     a.ontimeupdate=()=>{const f=el('vfill_'+id);if(f&&a.duration)f.style.width=(a.currentTime/a.duration*100)+'%';const d=el('vdur_'+id);if(d&&a.duration){const r=a.duration-a.currentTime;d.textContent=Math.floor(r/60)+':'+(('0'+Math.floor(r%60)).slice(-2));}};
-    a.onended=()=>{
-      if(btn)btn.textContent='▶';
-      // Reset fill bar
-      const f=el('vfill_'+id);if(f)f.style.width='0%';
-      // Auto-play next voice message below
-      const curBW=document.querySelector(`.bw[data-id="${id}"]`);
-      if(curBW){
-        let next=curBW.nextElementSibling;
-        while(next){
-          const nid=next.dataset.id;
-          const nvbub=next.querySelector('.vbub');
-          const nvbtn=next.querySelector('.vpbtn');
-          if(nvbub&&nvbtn&&nid){
-            // Found next voice bubble — play it
-            const nsrc=nvbtn.getAttribute('onclick')?.match(/'([^']+)'/g)?.[1]?.replace(/'/g,'');
-            if(nsrc)setTimeout(()=>toggleVP(nid,nsrc),300);
-            break;
-          }
-          next=next.nextElementSibling;
-        }
-      }
-    };
+    a.onended=()=>{if(btn)btn.textContent='▶';};
     a.onerror=()=>{showToast('⚠️ Cannot play');if(btn)btn.textContent='▶';};
     // Mark as played for sender notification - only if receiver is playing
     a.onplay=()=>{
@@ -1579,7 +1582,7 @@ function drawBars(canvasId,isRecFn){
       const bh=Math.max(4,Math.floor(h*H));
       const x=i*(barW+gap);
       const y=(H-bh)/2;
-      // Rounded rect bars in blue
+      // Rounded rect bars in red
       ctx.fillStyle='#1e88e5';
       const r=Math.min(barW/2,3);
       ctx.beginPath();
