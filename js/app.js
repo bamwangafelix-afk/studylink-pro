@@ -657,6 +657,7 @@ function openChat(name,uid){
   _loadMsgs(_msgLimit);
 
   // Typing indicator listener (stored separately so it can be cleaned up)
+  if(!document.getElementById('_tdotCSS')){const _s=document.createElement('style');_s.id='_tdotCSS';_s.textContent='@keyframes tdot{0%,80%,100%{opacity:.3;transform:scale(.65)}40%{opacity:1;transform:scale(1)}}';document.head.appendChild(_s);}
   window._typingUnsub=db.collection('chats').doc(cid).onSnapshot(sn=>{
     const d=sn.data()||{};
     const isTyping=(d.ty||d.typing||{})[uid];
@@ -665,13 +666,10 @@ function openChat(name,uid){
     if(isRecording){
       bar.style.display='flex';bar.style.alignItems='center';bar.style.padding='2px 14px 4px';
       bar.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#53bdeb;"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2z"/></svg>${name} is recording...</span>`;
-    } else if(isTyping){
+    }else if(isTyping){
       bar.style.display='flex';bar.style.alignItems='center';bar.style.padding='2px 14px 4px';
-      if(!document.getElementById('_tdotCSS')){const s=document.createElement('style');s.id='_tdotCSS';s.textContent='@keyframes tdot{0%,80%,100%{opacity:.3;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}';document.head.appendChild(s);}
-      bar.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--sub);">${name} is typing <span style="display:inline-flex;gap:2px;align-items:center;"><b style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;animation:tdot .9s infinite both"></b><b style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;animation:tdot .9s .2s infinite both"></b><b style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;animation:tdot .9s .4s infinite both"></b></span></span>`;
-    } else {
-      bar.style.display='none';bar.innerHTML='';
-    }
+      bar.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--sub);">${name} is typing <span style="display:inline-flex;gap:2px;align-items:center;margin-left:1px;"><b style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;animation:tdot .9s infinite both;"></b><b style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;animation:tdot .9s .2s infinite both;"></b><b style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;animation:tdot .9s .4s infinite both;"></b></span></span>`;
+    }else{bar.style.display='none';bar.innerHTML='';}
   });
 }
 function closeChat(){
@@ -945,12 +943,12 @@ async function deleteSelectedMsgs(isGrp,scope){
   if(!scope){
     // Fallback: show sheet
     const count=selectedMsgs.size;
-    const _sheetAllSelf=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
+    const _shSelf=[...selectedMsgs].every(id=>{const bw=document.querySelector(`.bw[data-id="${id}"]`);return bw&&bw.classList.contains('s');});
     const sheet=document.createElement('div');sheet.id='delSheet';
     sheet.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
     sheet.innerHTML=`<div style="background:var(--card);width:100%;max-width:500px;border-radius:18px 18px 0 0;padding:18px;">
       <p style="font-weight:bold;font-size:15px;text-align:center;margin-bottom:14px;">Delete ${count} message${count>1?'s':''}?</p>
-      ${_sheetAllSelf?`<button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">Delete for Everyone</button>`:''}
+      ${_shSelf?`<button onclick="execDelMsgs('everyone',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">Delete for Everyone</button>`:''}
       <button onclick="execDelMsgs('me',${isGrp})" style="width:100%;padding:13px;margin-bottom:8px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">Delete for Me</button>
       <button onclick="el('delSheet').remove()" style="width:100%;padding:13px;border:none;background:#1565c0;color:#fff;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer;">Cancel</button>
     </div>`;
@@ -1030,56 +1028,47 @@ function buildBbl(m,isGrp){
     else{inner=`${nameTag}${rq}<audio src="${m.data}" controls preload="none" style="width:200px;display:block;margin-top:3px;border-radius:6px;"></audio><div class="mar"><button class="mabtn dl" onclick="dlM('${m.data}','audio.mp3')">⬇</button></div>${rcHtml}${self?'<div class="receipt">'+( m.seen?'✓✓ Seen':'✓')+'</div>':''}`;}
   }
   else if(type==='voice'){
-    // WhatsApp-style voice bubble
-    const vBubbleBg=self?'#005c4b':'#202c33';
-    const vWaveColor=self?'rgba(255,255,255,0.75)':'rgba(134,167,181,0.9)';
-    const vPlayBg=self?'rgba(255,255,255,0.18)':'rgba(255,255,255,0.12)';
-    // Sender profile photo for the avatar circle
-    const senderPhoto=(self?MP?.photo:allUsers.find(u=>u.uid===m.senderUid)?.photo)||'';
-    const avatarHTML=senderPhoto
-      ?`<img src="${senderPhoto}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">`
-      :`<div style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;">👤</div>`;
-    // Waveform bars SVG (static, like WhatsApp)
-    const wBars=[3,5,9,7,12,16,20,14,22,26,30,24,28,32,26,22,30,24,20,26,18,14,20,12,16,9,7,11,5,7];
-    const waveSVG=`<svg viewBox="0 0 124 34" width="110" height="30" preserveAspectRatio="none" style="flex:1;cursor:pointer;" id="wvg_${m.id}" onclick="seekVP(event,'${m.id}')">
-      ${wBars.map((h,i)=>{const bh=Math.max(4,h),y=(34-bh)/2,x=2+i*4;return`<rect x="${x}" y="${y}" width="3" height="${bh}" rx="1.5" fill="${vWaveColor}" opacity="0.85" class="wbar_${m.id}" id="wb_${m.id}_${i}"/>`;}).join('')}
+    // Clean blue voice bubble — play button, waveform, duration, ticks
+    const vBg=self?'linear-gradient(135deg,#1565c0,#1e88e5)':'linear-gradient(135deg,#1a3a5c,#1e4d7b)';
+    const vWaveClr='rgba(255,255,255,0.7)';
+    const wHeights=[3,5,9,7,11,15,19,13,21,25,29,23,27,31,25,21,29,23,19,25,17,13,19,11,15,9,7,11,5,7];
+    const waveSVG=(fillId)=>`<svg viewBox="0 0 124 34" width="100%" height="32" preserveAspectRatio="none" style="display:block;">
+      ${wHeights.map((h,i)=>{const bh=Math.max(4,h),y=(34-bh)/2,x=2+i*4.1;return`<rect x="${x}" y="${y}" width="2.8" height="${bh}" rx="1.4" fill="${vWaveClr}" opacity="${0.45+h/62}"/>`;}).join('')}
     </svg>`;
     // Ticks
     let vTick='';
     if(self){
-      if(m.voicePlayed)vTick='<span style="color:#53bdeb;font-size:11px;font-weight:bold;">✓✓</span>';
-      else if(m.seen)vTick='<span style="color:rgba(255,255,255,.85);font-size:11px;">✓✓</span>';
-      else vTick='<span style="color:rgba(255,255,255,.5);font-size:11px;">✓</span>';
+      if(m.voicePlayed)vTick='<span style="color:#4fc3f7;font-size:12px;font-weight:bold;">✓✓</span>';
+      else if(m.seen)vTick='<span style="color:rgba(255,255,255,.9);font-size:12px;">✓✓</span>';
+      else vTick='<span style="color:rgba(255,255,255,.55);font-size:12px;">✓</span>';
     }
     const durLabel=m.dur||'0:00';
     if(!m.data){
-      // Uploading — show same layout, mic icon instead of play, single ✓
-      const uploadTick=self?'<span style="color:rgba(255,255,255,.5);font-size:11px;">✓</span>':'';
-      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="display:flex;align-items:center;gap:8px;background:${vBubbleBg};border-radius:12px;padding:8px 12px;min-width:220px;max-width:300px;position:relative;">
-        ${avatarHTML}
-        <div style="width:36px;height:36px;border-radius:50%;background:${vPlayBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="rgba(255,255,255,0.7)"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2z"/></svg>
+      // Uploading — mic icon, no play button yet, show ✓
+      const uTick=self?'<span style="color:rgba(255,255,255,.55);font-size:12px;">✓</span>':'';
+      inner=`${nameTag}<div id="vp_${m.id}" style="display:flex;align-items:center;gap:10px;background:${vBg};border-radius:16px;padding:10px 14px;min-width:230px;max-width:290px;">
+        <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="rgba(255,255,255,0.8)"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2z"/></svg>
         </div>
         <div style="flex:1;min-width:0;">
-          ${waveSVG}
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
-            <span style="font-size:11px;color:rgba(255,255,255,.55);">${durLabel}</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.45);">${m.time||''}${uploadTick}</span>
+          <div style="height:32px;overflow:hidden;">${waveSVG('u'+m.id)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;">
+            <span style="font-size:11px;color:rgba(255,255,255,.6);">${durLabel}</span>
+            <span style="display:flex;align-items:center;gap:3px;font-size:10px;color:rgba(255,255,255,.45);">${m.time||''}${uTick}</span>
           </div>
         </div>
       </div>${rcHtml}`;
     }else{
-      inner=`${nameTag}<div class="vbub" id="vp_${m.id}" style="display:flex;align-items:center;gap:8px;background:${vBubbleBg};border-radius:12px;padding:8px 12px;min-width:220px;max-width:300px;position:relative;">
-        ${avatarHTML}
-        <button class="vpbtn" onclick="toggleVP('${m.id}','${m.data}')" style="width:36px;height:36px;border-radius:50%;border:none;background:${vPlayBg};color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">▶</button>
+      inner=`${nameTag}<div id="vp_${m.id}" style="display:flex;align-items:center;gap:10px;background:${vBg};border-radius:16px;padding:10px 14px;min-width:230px;max-width:290px;">
+        <button class="vpbtn" onclick="toggleVP('${m.id}','${m.data}')" style="width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.22);color:#fff;font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">▶</button>
         <div style="flex:1;min-width:0;">
-          <div style="position:relative;height:30px;" id="vbar_${m.id}">
-            ${waveSVG}
-            <div id="vfill_${m.id}" style="position:absolute;left:0;top:0;width:0%;height:100%;background:rgba(83,189,235,.25);border-radius:4px;pointer-events:none;transition:width .1s linear;"></div>
+          <div style="position:relative;height:32px;cursor:pointer;" id="vbar_${m.id}" onclick="seekVP(event,'${m.id}')">
+            ${waveSVG(m.id)}
+            <div id="vfill_${m.id}" style="position:absolute;left:0;top:0;width:0%;height:100%;background:rgba(255,255,255,.18);border-radius:4px;pointer-events:none;transition:width .1s linear;"></div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
-            <span class="vdur" id="vdur_${m.id}" style="font-size:11px;color:rgba(255,255,255,.55);">${durLabel}</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.45);">${m.time||''}${vTick}</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;">
+            <span class="vdur" id="vdur_${m.id}" style="font-size:11px;color:rgba(255,255,255,.65);">${durLabel}</span>
+            <span style="display:flex;align-items:center;gap:3px;font-size:10px;color:rgba(255,255,255,.45);">${m.time||''}${vTick}</span>
           </div>
         </div>
       </div>${rcHtml}`;
@@ -1343,7 +1332,7 @@ function cancelPreview(){const m=el('imgPreviewModal');if(m)m.remove();_previewF
 //       release / tap send → stop recording → auto upload & send
 function toggleVoice(){isRec?stopAndSendVoice():startVoice();}
 async function startVoice(){
-  if(isRec)return; // guard double-start
+  if(isRec)return;
   if(!navigator.mediaDevices||!window.MediaRecorder){showToast('🎙️ Microphone not supported. Use Chrome.');return;}
   try{
     const s=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -1351,14 +1340,14 @@ async function startVoice(){
     mr=new MediaRecorder(s,opts);vCh=[];
     mr.ondataavailable=e=>{if(e.data?.size>0)vCh.push(e.data);};
     mr.start(200);isRec=true;vSec=0;
-    // Button → blue, animate up (user still holds)
+    navigator.vibrate&&navigator.vibrate([40]);
+    // Button → blue send arrow (tap it again to send)
     el('sendB').classList.add('rec');el('sendB').style.background='#1565c0';
-    el('sendB').style.transform='translateY(-6px) scale(1.1)';
-    el('sendB').style.transition='transform 0.15s ease';
+    el('sendIcon').innerHTML='<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>';
     el('vbar').style.display='flex';
     drawBars('vWave',()=>isRec);
     vInt=setInterval(()=>{vSec++;const mm=Math.floor(vSec/60),ss=vSec%60;el('vTimer').textContent=mm+':'+(ss<10?'0':'')+ss;},1000);
-    // Signal other user: "recording..."
+    // Signal other user recording
     if(curChat){const _rc=getCID(CU.uid,curChat.uid);db.collection('chats').doc(_rc).set({recording:{[CU.uid]:true}},{merge:true}).catch(()=>{});}
   }catch(err){showToast(err.name==='NotAllowedError'?'🎙️ Tap 🔒 → Allow Mic → Reload':'🎙️ '+err.message);}
 }
@@ -1371,13 +1360,9 @@ async function stopAndSendVoice(){
   try{mr.stop();}catch(e){}
   try{mr.stream.getTracks().forEach(t=>t.stop());}catch(e){}
   isRec=false;vCh=[];vSec=0;mr=null;
-  el('sendB').classList.remove('rec');
-  el('sendB').style.background='var(--btnB)';
-  el('sendB').style.transform='';
-  el('sendB').style.transition='';
+  el('sendB').classList.remove('rec');el('sendB').style.background='var(--btnB)';
   setMicIcon('sendIcon');
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
-  // Clear recording signal
   if(curChat){const _rc=getCID(CU.uid,curChat.uid);db.collection('chats').doc(_rc).set({recording:{[CU.uid]:false}},{merge:true}).catch(()=>{});}
   if(!chunks.length||!curChat){showToast('⚠️ Nothing recorded');return;}
   await new Promise(r=>setTimeout(r,300));
@@ -1410,13 +1395,9 @@ async function stopAndSendVoice(){
 function cancelVoice(){
   if(mr&&isRec){try{mr.ondataavailable=null;mr.onstop=null;mr.stop();}catch(e){}try{mr.stream.getTracks().forEach(t=>t.stop());}catch(e){}}
   isRec=false;vCh=[];vSec=0;clearInterval(vInt);mr=null;
-  el('sendB').classList.remove('rec');
-  el('sendB').style.background='var(--btnB)';
-  el('sendB').style.transform='';
-  el('sendB').style.transition='';
+  el('sendB').classList.remove('rec');el('sendB').style.background='var(--btnB)';
   setMicIcon('sendIcon');
   el('vbar').style.display='none';el('vTimer').textContent='0:00';
-  // Clear recording signal
   if(curChat){const _rc=getCID(CU.uid,curChat.uid);db.collection('chats').doc(_rc).set({recording:{[CU.uid]:false}},{merge:true}).catch(()=>{});}
 }
 // Keep old processVoice/stopVoice/showVoiceReady stubs so smartSend still compiles
@@ -1482,36 +1463,16 @@ function cancelGVoice(){
 // ── SWIPE-UP TO RECORD (mic button touch events) ──
 // Called from HTML after chat opens
 function setupVoiceSwipe(btnId,startFn,stopFn,cancelFn){
-  // WhatsApp-style: hold mic to record, release finger keeps recording,
-  // tap the send arrow to send, swipe left to cancel
+  // TAP-TO-RECORD: tap mic = start, tap send arrow = send, tap X = cancel
+  // No hold needed — avoids browser long-press gestures that exit the page
   const btn=el(btnId);if(!btn)return;
-  let startX=0,startY=0,_active=false,_cancelled=false,_holdTimer=null;
-  btn.addEventListener('touchstart',e=>{
-    const inp=btnId==='sendB'?el('mIn'):el('gIn');
-    if(inp&&inp.value.trim())return; // text mode — ignore
-    if(window[btnId==='sendB'?'isRec':'gIsRec'])return; // already recording — this tap = send
-    e.preventDefault();
-    startX=e.touches[0].clientX;startY=e.touches[0].clientY;
-    _active=false;_cancelled=false;
-    // Hold 150ms to start (avoids accidental taps)
-    _holdTimer=setTimeout(()=>{
-      _active=true;
-      navigator.vibrate&&navigator.vibrate([40]);
-      startFn();
-    },150);
-  },{passive:false});
-  btn.addEventListener('touchmove',e=>{
-    if(!_active||_cancelled)return;
-    e.preventDefault();
-    const dx=startX-e.touches[0].clientX;
-    if(dx>70){_cancelled=true;_active=false;clearTimeout(_holdTimer);cancelFn();navigator.vibrate&&navigator.vibrate([30,30]);}
-  },{passive:false});
-  btn.addEventListener('touchend',e=>{
-    clearTimeout(_holdTimer);
-    // Finger lifted — do NOT auto-send. Just keep recording.
-    // User must tap sendB again (which calls smartSend → stopAndSendVoice)
-    _active=false;
-  },{passive:false});
+  // Prevent context menu on long press (stops browser from taking over)
+  btn.addEventListener('contextmenu',e=>e.preventDefault());
+  btn.style.webkitTouchCallout='none';
+  btn.style.webkitUserSelect='none';
+  btn.style.userSelect='none';
+  // The actual start is triggered by smartSend / toggleVoice via onclick
+  // This function now just adds the contextmenu guard
 }
 // Stubs for smartGSend compatibility
 function stopGVoice(){stopAndSendGVoice();}
@@ -1523,20 +1484,29 @@ function toggleVP(id,src){
   if(vPlayers[id]&&!vPlayers[id].paused){vPlayers[id].pause();if(btn)btn.textContent='▶';return;}
   if(!vPlayers[id]){
     const a=new Audio(src);vPlayers[id]=a;
-    a.ontimeupdate=()=>{const f=el('vfill_'+id);if(f&&a.duration)f.style.width=(a.currentTime/a.duration*100)+'%';const d=el('vdur_'+id);if(d&&a.duration){const r=a.duration-a.currentTime;d.textContent=Math.floor(r/60)+':'+(('0'+Math.floor(r%60)).slice(-2));}};
-    a.onended=()=>{if(btn)btn.textContent='▶';};
-    a.onerror=()=>{showToast('⚠️ Cannot play');if(btn)btn.textContent='▶';};
-    // Mark as played for sender notification - only if receiver is playing
+    a.ontimeupdate=()=>{
+      const f=el('vfill_'+id);
+      if(f&&a.duration)f.style.width=(a.currentTime/a.duration*100)+'%';
+      const d=el('vdur_'+id);
+      if(d&&a.duration){const r=a.duration-a.currentTime;d.textContent=Math.floor(r/60)+':'+(('0'+Math.floor(r%60)).slice(-2));}
+    };
+    a.onended=()=>{
+      if(btn)btn.textContent='▶';
+      const f=el('vfill_'+id);if(f)f.style.width='0%';
+      const d=el('vdur_'+id);if(d)d.textContent=a.duration?Math.floor(a.duration/60)+':'+(('0'+Math.floor(a.duration%60)).slice(-2)):'0:00';
+      // Auto-play next voice bubble
+      const curBW=document.querySelector(`.bw[data-id="${id}"]`);
+      if(curBW){let nx=curBW.nextElementSibling;while(nx){const nid=nx.dataset?.id;const nvbtn=nx.querySelector('.vpbtn');if(nid&&nvbtn){const nsrc=nvbtn.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];if(nsrc)setTimeout(()=>toggleVP(nid,nsrc),400);break;}nx=nx.nextElementSibling;}}
+    };
+    a.onerror=()=>{showToast('⚠️ Cannot play audio');if(btn)btn.textContent='▶';};
     a.onplay=()=>{
       if(!curChat)return;
       const bw=document.querySelector(`.bw[data-id="${id}"]`);
-      if(bw&&!bw.classList.contains('s')){
-        // This is receiver playing sender's voice note
-        markVoicePlayed(id,null);
-      }
+      if(bw&&!bw.classList.contains('s')){markVoicePlayed(id,null);}
     };
   }
-  vPlayers[id].play().catch(e=>showToast('⚠️ '+e.message));if(btn)btn.textContent='⏸';
+  vPlayers[id].play().catch(e=>showToast('⚠️ '+e.message));
+  if(btn)btn.textContent='⏸';
 }
 function seekVP(e,id){const bar=el('vbar_'+id);if(!bar||!vPlayers[id]?.duration)return;vPlayers[id].currentTime=((e.clientX-bar.getBoundingClientRect().left)/bar.offsetWidth)*vPlayers[id].duration;}
 // ── WAVEFORM BARS ANIMATION (equalizer style like the waveform image) ──
@@ -1687,12 +1657,11 @@ function renderInbox(q="",sn=null){
       const unread=(_overrides[cid]===0)?0:Math.max((data.unread||{})[CU.uid]||0,_userUnreadMap[cid]||0);
       // Render lastMsg with SVG icon for media types
       const _rawMsg=data.lastMsg||'';
-      // Check if other user is typing or recording right now
       const _otherTyping=(data.ty||data.typing||{})[ouid];
       const _otherRecording=(data.recording||{})[ouid];
       let _msgHtml;
       if(_otherRecording){
-        _msgHtml=`<span style="color:#53bdeb;display:inline-flex;align-items:center;gap:4px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2z"/></svg>Recording...</span>`;
+        _msgHtml=`<span style="color:#53bdeb;display:inline-flex;align-items:center;gap:3px;"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.97 3.52 9.1 8 9.8V22h4v-4.27c4.48-.7 8-4.83 8-9.8h-2c0 4.08-3.06 7.44-7 7.93V15h-2z"/></svg>Recording...</span>`;
       } else if(_otherTyping){
         _msgHtml=`<span style="color:#53bdeb;">typing...</span>`;
       } else if(_rawMsg==='__photo__')_msgHtml=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:middle;margin-right:3px;flex-shrink:0;"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>Photo`;
